@@ -15,6 +15,10 @@
 - Format: `cargo fmt --all`.
 - Test: `cargo test` (runs unit + integration tests).
 
+### CLI Usage Examples
+- Read a page: `cargo run -- read 123456 --format text`
+- Alias: `cargo run -- get 123456 --format view` (same as `read`).
+
 ## Coding Style & Naming Conventions
 - Use `rustfmt` defaults (4-space indent; toolchain line width).
 - Naming: `snake_case` (functions/modules), `CamelCase` (types/traits), `SCREAMING_SNAKE_CASE` (consts).

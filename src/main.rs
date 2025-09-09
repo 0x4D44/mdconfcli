@@ -5,31 +5,23 @@ use reqwest::blocking::Client;
 use reqwest::header::ACCEPT;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::env;
 use url::Url;
+mod auth;
+use auth as keyauth;
 
 /// CLI shape ─ minimal, MCP-friendly, JSON-only
 #[derive(Parser)]
 #[command(
     name = "conf-cli",
     about = "Confluence CLI (MCP-friendly, JSON-only)",
-    long_about = r#"Authentication is via environment variables:
-  - CONFLUENCE_BASE   Base wiki URL (e.g. https://your-domain.atlassian.net/wiki)
-  - CONFLUENCE_EMAIL  Atlassian account email (Cloud) or username (Server/DC)
-  - CONFLUENCE_TOKEN  Atlassian API token (create at id.atlassian.com)
+    long_about = r#"Authentication is stored in the OS keychain (Windows Credential Manager).
 
-Examples
-  PowerShell:
-    $env:CONFLUENCE_BASE = "https://example.atlassian.net/wiki"
-    $env:CONFLUENCE_EMAIL = "you@example.com"
-    $env:CONFLUENCE_TOKEN = "<api-token>"
+Run `conf-cli init` to set or update:
+  - Base URL: e.g. https://your-domain.atlassian.net/wiki
+  - Email/username: e.g. you@example.com
+  - API token: from https://id.atlassian.com/manage-profile/security/api-tokens
 
-  Bash:
-    export CONFLUENCE_BASE="https://example.atlassian.net/wiki"
-    export CONFLUENCE_EMAIL="you@example.com"
-    export CONFLUENCE_TOKEN="<api-token>"
-
-Verify auth and see commands: conf-cli info"#
+The CLI will prompt if credentials are missing or invalid."#
 )]
 struct Cli {
     #[command(subcommand)]
@@ -38,8 +30,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Return supported commands & auth identity (from env)
+    /// Return supported commands & current keychain auth status
     Info,
+    /// Initialize or update credentials in the OS keychain
+    Init,
     /// Search Confluence via CQL or simple free-text
     Search {
         /// Free-text query -> becomes CQL 'text ~ "<query>"'
@@ -64,6 +58,7 @@ enum Command {
         start: usize,
     },
     /// Read a page by numeric ID or full Confluence URL
+    #[command(visible_alias = "get")]
     Read {
         /// Numeric ID or page URL like /spaces/KEY/pages/<ID>/...
         target: String,
@@ -76,28 +71,15 @@ enum Command {
     },
 }
 
-/// Simple, env-based auth (suited for MCP)
+/// Keychain-based auth
 #[derive(Clone)]
-struct ConfAuth {
+pub struct ConfAuth {
     base: String,
     email: String,
     token: String,
 }
 
-impl ConfAuth {
-    fn from_env() -> Result<Self> {
-        let base = env::var("CONFLUENCE_BASE")
-            .context("Missing CONFLUENCE_BASE (e.g. https://your-domain.atlassian.net/wiki)")?;
-        let email = env::var("CONFLUENCE_EMAIL").context("Missing CONFLUENCE_EMAIL")?;
-        let token = env::var("CONFLUENCE_TOKEN")
-            .context("Missing CONFLUENCE_TOKEN (Atlassian API token)")?;
-        Ok(Self {
-            base: base.trim_end_matches('/').to_string(),
-            email,
-            token,
-        })
-    }
-}
+impl ConfAuth {}
 
 fn main() {
     if let Err(e) = real_main() {
@@ -116,6 +98,10 @@ fn real_main() -> Result<()> {
 
     match cli.cmd {
         Command::Info => cmd_info(),
+        Command::Init => {
+            keyauth::init_flow()?;
+            Ok(())
+        }
         Command::Search {
             query,
             cql,
@@ -125,7 +111,7 @@ fn real_main() -> Result<()> {
             limit,
             start,
         } => {
-            let auth = ConfAuth::from_env()?;
+            let auth = keyauth::resolve_interactive()?;
             cmd_search(&auth, query, cql, space, r#type, label, limit, start)
         }
         Command::Read {
@@ -133,7 +119,7 @@ fn real_main() -> Result<()> {
             format,
             width,
         } => {
-            let auth = ConfAuth::from_env()?;
+            let auth = keyauth::resolve_interactive()?;
             cmd_read(&auth, &target, &format, width)
         }
     }
@@ -158,17 +144,12 @@ struct InfoOut {
 }
 
 fn cmd_info() -> Result<()> {
-    let auth = match ConfAuth::from_env() {
-        Ok(a) => json!({
-            "ok": true,
-            "base": a.base,
-            "email": a.email
-        }),
-        Err(_) => json!({
-            "ok": false,
-            "base": env::var("CONFLUENCE_BASE").ok(),
-            "email": env::var("CONFLUENCE_EMAIL").ok()
-        }),
+    let auth = match keyauth::load()? {
+        Some(a) => {
+            let valid = keyauth::check(&a).is_ok();
+            json!({ "exists": true, "valid": valid, "base": a.base, "email": a.email })
+        }
+        None => json!({ "exists": false, "valid": false }),
     };
 
     let commands = vec![
@@ -194,7 +175,7 @@ fn cmd_info() -> Result<()> {
         },
         CommandSpec {
             name: "read".into(),
-            description: "Read page by numeric ID or URL. Formats: text|view|storage".into(),
+            description: "Read page by numeric ID or URL. Formats: text|view|storage (alias: get)".into(),
             args: json!({
                 "target": "string (ID or Confluence URL)",
                 "--format?": "text|view|storage (default text)",
@@ -202,11 +183,21 @@ fn cmd_info() -> Result<()> {
             }),
             example: r#"conf-cli read https://your.atlassian.net/wiki/spaces/ENG/pages/123456/My+Page --format text"#.into(),
         },
+        CommandSpec {
+            name: "get".into(),
+            description: "Alias of 'read' for convenience".into(),
+            args: json!({
+                "target": "string (ID or Confluence URL)",
+                "--format?": "text|view|storage (default text)",
+                "--width?": "number (wrap width for text, default 100)"
+            }),
+            example: r#"conf-cli get 123456 --format view"#.into(),
+        },
     ];
 
     let out = InfoOut {
         tool: "conf-cli",
-        version: "0.1.0",
+        version: "0.2.0",
         auth,
         commands,
     };
