@@ -38,20 +38,16 @@ jobs:
           generate_release_notes: true
 
   build:
-    name: Build release binaries
+    name: Build Windows x86_64 binary
     needs: create-release
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install dependencies (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
 
       - name: Install Rust (stable) with components
         uses: dtolnay/rust-toolchain@stable
@@ -72,27 +68,12 @@ jobs:
       - name: Build release
         run: cargo build --release
 
-      - name: Prepare asset name (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Prepare asset name (Windows x86_64)
         shell: pwsh
         run: |
-          $name = "mdconfcli-${{ github.ref_name }}-windows-${{ runner.arch }}.exe"
+          $name = "mdconfcli-${{ github.ref_name }}-windows-x86_64.exe"
           Copy-Item target/release/mdconfcli.exe $name
           echo "ASSET=$name" >> $env:GITHUB_ENV
-
-      - name: Prepare asset name (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          name="mdconfcli-${{ github.ref_name }}-linux-${{ runner.arch }}"
-          cp target/release/mdconfcli "$name"
-          echo "ASSET=$name" >> $GITHUB_ENV
-
-      - name: Prepare asset name (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          name="mdconfcli-${{ github.ref_name }}-macos-${{ runner.arch }}"
-          cp target/release/mdconfcli "$name"
-          echo "ASSET=$name" >> $GITHUB_ENV
 
       - name: Upload asset to Release
         uses: softprops/action-gh-release@v2
@@ -100,4 +81,3 @@ jobs:
           files: ${{ env.ASSET }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

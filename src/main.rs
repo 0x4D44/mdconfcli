@@ -197,7 +197,7 @@ fn cmd_info() -> Result<()> {
 
     let out = InfoOut {
         tool: "conf-cli",
-        version: "0.2.0",
+        version: "0.3.0",
         auth,
         commands,
     };
