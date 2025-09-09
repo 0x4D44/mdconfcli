@@ -71,7 +71,7 @@ jobs:
       - name: Prepare asset name (Windows x86_64)
         shell: pwsh
         run: |
-          $name = "mdconfcli-${{ github.ref_name }}-windows-x86_64.exe"
+          $name = "mdconfcli-x86_64.exe"
           Copy-Item target/release/mdconfcli.exe $name
           echo "ASSET=$name" >> $env:GITHUB_ENV
 

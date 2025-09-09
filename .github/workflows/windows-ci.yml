@@ -36,9 +36,13 @@ jobs:
       - name: Build release (Windows)
         run: cargo build --release
 
+      - name: Prepare exe name
+        shell: pwsh
+        run: |
+          Copy-Item target/release/mdconfcli.exe mdconfcli-x86_64.exe
+
       - name: Upload artifact (exe)
         uses: actions/upload-artifact@v4
         with:
-          name: mdconfcli-windows-x86_64
-          path: target/release/mdconfcli.exe
-
+          name: mdconfcli-x86_64
+          path: mdconfcli-x86_64.exe
