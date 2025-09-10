@@ -26,6 +26,11 @@ The init flow will prompt for:
 - Email/username
 - API token
 
+Force reinitialize (overwrite even if current creds are valid):
+```
+conf-cli init --force
+```
+
 Notes:
 - Cloud: use your Atlassian account email and an API token.
 - Server/Data Center: use your username and a Personal Access Token (if enabled by your admin).

@@ -68,10 +68,10 @@ jobs:
       - name: Build release
         run: cargo build --release
 
-      - name: Prepare asset name (Windows x86_64)
+      - name: Prepare asset name (Windows)
         shell: pwsh
         run: |
-          $name = "mdconfcli-x86_64.exe"
+          $name = "mdconfcli.exe"
           Copy-Item target/release/mdconfcli.exe $name
           echo "ASSET=$name" >> $env:GITHUB_ENV
 

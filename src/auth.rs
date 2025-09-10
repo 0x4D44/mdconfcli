@@ -88,8 +88,54 @@ pub fn resolve_interactive() -> Result<ConfAuth> {
     Ok(auth)
 }
 
-pub fn init_flow() -> Result<()> {
-    let _ = resolve_interactive()?;
+pub fn init_flow(force: bool) -> Result<()> {
+    if force {
+        eprintln!("Forcing credential reinitialization.");
+        let base = prompt(
+            "Confluence base URL (e.g. https://your-domain.atlassian.net/wiki): ",
+            None,
+        )?;
+        let email = prompt("Email/username (e.g. you@example.com): ", None)?;
+        let token = prompt_secret("API token (input hidden): ")?;
+
+        let auth = ConfAuth {
+            base: base.trim_end_matches('/').to_string(),
+            email,
+            token,
+        };
+        store(&auth)?;
+        check(&auth).context("Stored credentials failed to authenticate")?;
+        eprintln!("Credentials saved to Windows Credential Manager.");
+        return Ok(());
+    }
+
+    match load()? {
+        Some(a) => {
+            if check(&a).is_ok() {
+                eprintln!("Credentials already valid; no changes made.");
+                return Ok(());
+            }
+            eprintln!("Stored credentials appear invalid. Let's update them.");
+        }
+        None => {
+            eprintln!("No credentials found. Let's set them up.");
+        }
+    }
+
+    let base = prompt(
+        "Confluence base URL (e.g. https://your-domain.atlassian.net/wiki): ",
+        None,
+    )?;
+    let email = prompt("Email/username (e.g. you@example.com): ", None)?;
+    let token = prompt_secret("API token (input hidden): ")?;
+
+    let auth = ConfAuth {
+        base: base.trim_end_matches('/').to_string(),
+        email,
+        token,
+    };
+    store(&auth)?;
+    check(&auth).context("Stored credentials failed to authenticate")?;
     eprintln!("Credentials saved to Windows Credential Manager.");
     Ok(())
 }

@@ -21,7 +21,9 @@ Run `conf-cli init` to set or update:
   - Email/username: e.g. you@example.com
   - API token: from https://id.atlassian.com/manage-profile/security/api-tokens
 
-The CLI will prompt if credentials are missing or invalid."#
+By default, init skips prompting if valid credentials already exist. Use
+`conf-cli init --force` to overwrite stored credentials even if the current
+ones validate. The CLI will prompt if credentials are missing or invalid."#
 )]
 struct Cli {
     #[command(subcommand)]
@@ -33,7 +35,11 @@ enum Command {
     /// Return supported commands & current keychain auth status
     Info,
     /// Initialize or update credentials in the OS keychain
-    Init,
+    Init {
+        /// Overwrite existing credentials without validating current ones
+        #[arg(long)]
+        force: bool,
+    },
     /// Search Confluence via CQL or simple free-text
     Search {
         /// Free-text query -> becomes CQL 'text ~ "<query>"'
@@ -98,8 +104,8 @@ fn real_main() -> Result<()> {
 
     match cli.cmd {
         Command::Info => cmd_info(),
-        Command::Init => {
-            keyauth::init_flow()?;
+        Command::Init { force } => {
+            keyauth::init_flow(force)?;
             Ok(())
         }
         Command::Search {
@@ -197,7 +203,7 @@ fn cmd_info() -> Result<()> {
 
     let out = InfoOut {
         tool: "conf-cli",
-        version: "0.3.0",
+        version: "0.3.3",
         auth,
         commands,
     };
