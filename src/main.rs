@@ -23,7 +23,55 @@ Run `conf-cli init` to set or update:
 
 By default, init skips prompting if valid credentials already exist. Use
 `conf-cli init --force` to overwrite stored credentials even if the current
-ones validate. The CLI will prompt if credentials are missing or invalid."#
+ones validate. The CLI will prompt if credentials are missing or invalid.
+
+Output is JSON by default for easy programmatic consumption. For page reading,
+use `--format` to choose between `text`, `view` (rendered HTML), or `storage`
+(Confluence storage format).
+
+Use `--help` for the full, example-rich help for all commands."#,
+    after_long_help = r#"EXAMPLES
+
+Quick start
+  # Set up credentials (prompts for base URL, email, API token)
+  conf-cli init
+
+  # Show supported commands and whether auth is valid
+  conf-cli info
+
+Authentication
+  # Reinitialize and overwrite any existing credentials
+  conf-cli init --force
+
+Search
+  # Free-text search within all spaces (defaults type=page)
+  conf-cli search "runbook"
+
+  # Search within a specific space
+  conf-cli search "incident response" --space ENG --limit 10
+
+  # Search by raw CQL (overrides free text and other filters)
+  conf-cli search --cql 'type = page AND label in ("runbook")' --limit 50
+
+  # Multiple label filters (repeatable)
+  conf-cli search "onboarding" --label howto --label checklist
+
+Read (alias: get)
+  # Read by numeric ID as plain text (wrapped)
+  conf-cli read 123456 --format text --width 100
+
+  # Read by full URL and get rendered HTML
+  conf-cli read https://your-domain.atlassian.net/wiki/spaces/ENG/pages/123456/My+Page --format view
+
+  # Use the alias 'get' and return storage format
+  conf-cli get 123456 --format storage
+
+Notes
+  - `--format text` prints `body_text` with the specified `--width` wrapping.
+  - `--format view` prints `body_view_html` (rendered HTML).
+  - `--format storage` prints `body_storage` (Confluence storage format).
+  - All commands print JSON to stdout; errors are printed as JSON to stderr.
+"#
 )]
 struct Cli {
     #[command(subcommand)]
@@ -33,14 +81,57 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Return supported commands & current keychain auth status
+    #[command(
+        long_about = r#"Outputs a JSON object with tool metadata, version, 
+current keychain auth status, and a list of supported commands, including 
+their descriptions and example invocations."#,
+        after_long_help = r#"EXAMPLES
+  conf-cli info
+"#
+    )]
     Info,
     /// Initialize or update credentials in the OS keychain
+    #[command(
+        long_about = r#"Stores Confluence credentials in the OS keychain (Windows Credential Manager).
+
+If valid credentials are already present, `init` will exit without changes.
+Use `--force` to overwrite stored credentials without attempting to validate
+the current ones first."#,
+        after_long_help = r#"EXAMPLES
+  # Interactive setup (prompts for base URL, email, API token)
+  conf-cli init
+
+  # Force reinitialization even if credentials seem valid
+  conf-cli init --force
+"#
+    )]
     Init {
         /// Overwrite existing credentials without validating current ones
         #[arg(long)]
         force: bool,
     },
     /// Search Confluence via CQL or simple free-text
+    #[command(
+        long_about = r#"Search Confluence content using either a simple free-text query
+or raw Confluence Query Language (CQL). When `--cql` is provided, it takes
+precedence over free-text and other filter arguments.
+
+The default content type filter is `page`. Labels may be repeated to include
+multiple label constraints."#,
+        after_long_help = r#"EXAMPLES
+  # Free-text search within all spaces (defaults type=page)
+  conf-cli search "runbook"
+
+  # Search within a specific space
+  conf-cli search "incident response" --space ENG --limit 10
+
+  # Search by raw CQL (overrides free text and other filters)
+  conf-cli search --cql 'type = page AND label in ("runbook")' --limit 50
+
+  # Multiple label filters (repeatable)
+  conf-cli search "onboarding" --label howto --label checklist
+"#
+    )]
     Search {
         /// Free-text query -> becomes CQL 'text ~ "<query>"'
         #[arg(value_name = "QUERY")]
@@ -64,7 +155,26 @@ enum Command {
         start: usize,
     },
     /// Read a page by numeric ID or full Confluence URL
-    #[command(visible_alias = "get")]
+    #[command(
+        visible_alias = "get",
+        long_about = r#"Fetch a Confluence page by numeric ID or by full page URL.
+
+The `--format` flag controls the output body representation:
+  - text:    Rendered to plain text (wrapped with `--width`).
+  - view:    Rendered HTML (as served by Confluence).
+  - storage: Confluence storage format (structured HTML/XML).
+"#,
+        after_long_help = r#"EXAMPLES
+  # Read by numeric ID as plain text (wrapped)
+  conf-cli read 123456 --format text --width 100
+
+  # Read by full URL and get rendered HTML
+  conf-cli read https://your-domain.atlassian.net/wiki/spaces/ENG/pages/123456/My+Page --format view
+
+  # Use the alias 'get' and return storage format
+  conf-cli get 123456 --format storage
+"#
+    )]
     Read {
         /// Numeric ID or page URL like /spaces/KEY/pages/<ID>/...
         target: String,
@@ -203,7 +313,7 @@ fn cmd_info() -> Result<()> {
 
     let out = InfoOut {
         tool: "conf-cli",
-        version: "0.3.3",
+        version: env!("CARGO_PKG_VERSION"),
         auth,
         commands,
     };
