@@ -33,6 +33,9 @@ jobs:
       - name: Clippy (deny warnings)
         run: cargo clippy --all-targets -- -D warnings
 
+      - name: Test
+        run: cargo test --all --locked --no-fail-fast
+
       - name: Build release (Windows)
         run: cargo build --release
 
