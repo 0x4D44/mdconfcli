@@ -845,9 +845,10 @@ mod tests {
     fn help_subcommands_contain_examples() {
         let mut root = Cli::command();
         for name in ["info", "init", "search", "read"] {
+            let msg = format!("missing subcommand: {}", name);
             let mut sub = root
                 .find_subcommand_mut(name)
-                .unwrap_or_else(|| panic!("missing subcommand: {name}"));
+                .expect(&msg);
             let help = long_help(&mut sub);
             assert!(
                 help.contains("EXAMPLES"),
