@@ -846,7 +846,7 @@ mod tests {
         for name in ["info", "init", "search", "read"] {
             let msg = format!("missing subcommand: {}", name);
             let mut sub = root.find_subcommand_mut(name).expect(&msg);
-            let help = long_help(&mut sub);
+            let help = long_help(sub);
             assert!(
                 help.contains("EXAMPLES"),
                 "expected EXAMPLES section in --help for subcommand {name}\n{help}"
