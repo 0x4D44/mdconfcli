@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify tag matches Cargo.toml version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION=$(grep -Po '^version\s*=\s*"\K[^"]+' Cargo.toml)
+          echo "Tag: $TAG | Cargo version: $VERSION"
+          if [ "v$VERSION" != "$TAG" ]; then
+            echo "Tag v$VERSION != $TAG" >&2
+            exit 1
+          fi
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: mdconfcli ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+  build:
+    name: Build Windows x86_64 binary
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (stable) with components
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --all --locked --no-fail-fast
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Prepare asset name (Windows)
+        shell: pwsh
+        run: |
+          $name = "mdconfcli.exe"
+          Copy-Item target/release/mdconfcli.exe $name
+          echo "ASSET=$name" >> $env:GITHUB_ENV
+
+      - name: Upload asset to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ASSET }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

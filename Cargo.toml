@@ -1,0 +1,16 @@
+[package]
+name = "mdconfcli"
+version = "0.4.4"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+reqwest = { version = "0.12", features = ["json", "blocking", "gzip", "native-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"
+regex = "1"
+html2text = "0.6"
+keyring = "2"
+rpassword = "7"
