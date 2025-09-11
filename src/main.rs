@@ -725,3 +725,134 @@ fn cmd_read(auth: &ConfAuth, target: &str, format: &str, width: usize) -> Result
     println!("{}", serde_json::to_string_pretty(&out)?);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    /* ---------- extract_id ---------- */
+
+    #[test]
+    fn extract_id_accepts_numeric() {
+        let id = extract_id("123456").expect("numeric id should parse");
+        assert_eq!(id, "123456");
+    }
+
+    #[test]
+    fn extract_id_parses_full_url() {
+        let id = extract_id(
+            "https://example.atlassian.net/wiki/spaces/ENG/pages/987654/Title",
+        )
+        .expect("url id should parse");
+        assert_eq!(id, "987654");
+    }
+
+    #[test]
+    fn extract_id_rejects_invalid() {
+        let err = extract_id("https://example.atlassian.net/wiki/spaces/ENG/page/Title")
+            .expect_err("should error when /pages/<ID>/ not present");
+        let msg = err.to_string();
+        assert!(msg.contains("Could not extract page ID"));
+    }
+
+    /* ---------- build_cql ---------- */
+
+    #[test]
+    fn build_cql_defaults_to_type_page() {
+        let cql = build_cql(None, None, None, String::new(), vec![]);
+        assert_eq!(cql, "type = page");
+    }
+
+    #[test]
+    fn build_cql_combines_filters_in_order() {
+        let cql = build_cql(
+            Some("onboarding".to_string()),
+            None,
+            Some("ENG".to_string()),
+            "page".to_string(),
+            vec!["howto".to_string(), "checklist".to_string()],
+        );
+        assert_eq!(
+            cql,
+            "type = page AND space = \"ENG\" AND label = \"howto\" AND label = \"checklist\" AND text ~ \"onboarding\""
+        );
+    }
+
+    #[test]
+    fn build_cql_cql_precedence() {
+        let cql = build_cql(
+            Some("ignored".to_string()),
+            Some("type = blogpost".to_string()),
+            Some("ENG".to_string()),
+            "page".to_string(),
+            vec!["foo".to_string()],
+        );
+        assert_eq!(cql, "type = blogpost");
+    }
+
+    /* ---------- CLI parsing & defaults ---------- */
+
+    #[test]
+    fn cli_alias_get_maps_to_read() {
+        let cli = Cli::try_parse_from(["conf-cli", "get", "123"]).expect("parse ok");
+        match cli.cmd {
+            Command::Read { ref target, .. } => assert_eq!(target, "123"),
+            _ => panic!("expected Read for alias 'get'"),
+        }
+    }
+
+    #[test]
+    fn cli_read_defaults() {
+        let cli =
+            Cli::try_parse_from(["conf-cli", "read", "123"]).expect("parse read defaults");
+        match cli.cmd {
+            Command::Read { ref format, width, .. } => {
+                assert_eq!(format, "text");
+                assert_eq!(width, 100);
+            }
+            _ => panic!("expected Read command"),
+        }
+    }
+
+    #[test]
+    fn cli_search_default_type_page() {
+        let cli = Cli::try_parse_from(["conf-cli", "search", "runbook"]).expect("parse ok");
+        match cli.cmd {
+            Command::Search { ref r#type, .. } => assert_eq!(r#type, "page"),
+            _ => panic!("expected Search command"),
+        }
+    }
+
+    /* ---------- Help content ---------- */
+
+    fn long_help(cmd: &mut clap::Command) -> String {
+        let mut buf = Vec::new();
+        cmd.write_long_help(&mut buf).expect("write long help");
+        String::from_utf8(buf).expect("utf8 help")
+    }
+
+    #[test]
+    fn help_top_level_contains_examples() {
+        let mut cmd = Cli::command();
+        let help = long_help(&mut cmd);
+        assert!(help.contains("EXAMPLES"));
+        assert!(help.contains("conf-cli search"));
+        assert!(help.contains("conf-cli read"));
+    }
+
+    #[test]
+    fn help_subcommands_contain_examples() {
+        let mut root = Cli::command();
+        for name in ["info", "init", "search", "read"] {
+            let mut sub = root
+                .find_subcommand_mut(name)
+                .unwrap_or_else(|| panic!("missing subcommand: {name}"));
+            let help = long_help(&mut sub);
+            assert!(
+                help.contains("EXAMPLES"),
+                "expected EXAMPLES section in --help for subcommand {name}\n{help}"
+            );
+        }
+    }
+}
